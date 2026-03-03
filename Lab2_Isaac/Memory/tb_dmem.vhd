@@ -1,0 +1,97 @@
+library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity tb_dmem is
+end entity;
+
+architecture sim of tb_dmem is
+    constant DATA_WIDTH : natural := 32;
+    constant ADDR_WIDTH : natural := 10;
+
+    constant gCLK_HPER : time := 5 ns;       
+    constant cCLK_PER  : time := gCLK_HPER * 2;
+
+    signal clk : std_logic := '0';
+    signal addr : std_logic_vector(ADDR_WIDTH-1 downto 0) := (others => '0');
+    signal data : std_logic_vector(DATA_WIDTH-1 downto 0) := (others => '0');
+    signal we : std_logic := '0';
+    signal q : std_logic_vector(DATA_WIDTH-1 downto 0);
+
+    -- storage
+    type mem_array_t is array (0 to 9) of std_logic_vector(DATA_WIDTH-1 downto 0);
+    signal temp_values : mem_array_t;
+
+component mem is 
+generic 
+	(
+		DATA_WIDTH : natural := 32;
+		ADDR_WIDTH : natural := 10
+	);
+
+	port 
+	(
+		clk : in std_logic;
+		addr : in std_logic_vector((ADDR_WIDTH-1) downto 0);
+		data : in std_logic_vector((DATA_WIDTH-1) downto 0);
+		we : in std_logic := '1';
+		q	: out std_logic_vector((DATA_WIDTH -1) downto 0)
+	);
+
+end component;
+
+
+begin
+
+    clk_process : process
+    begin
+        while true loop
+            clk <= '0';
+            wait for gCLK_HPER;
+            clk <= '1';
+            wait for gCLK_HPER;
+        end loop;
+    end process;
+
+    -- data memory 
+    dmem : mem
+        generic map (
+            DATA_WIDTH => DATA_WIDTH,
+            ADDR_WIDTH => ADDR_WIDTH
+        )
+        port map (
+            clk => clk,
+            addr => addr,
+            data => data,
+            we => we,
+            q => q
+        );
+
+    stim_proc : process
+    begin
+
+        for i in 0 to 9 loop
+            addr <= std_logic_vector(to_unsigned(i, ADDR_WIDTH));
+            wait for gCLK_HPER/2; -- allow q to update before reporting
+            temp_values(i) <= q;
+            wait for cCLK_PER; 
+        end loop;
+
+        for i in 0 to 9 loop
+            addr <= std_logic_vector(to_unsigned(16#100# + i, ADDR_WIDTH));
+            data <= temp_values(i);
+            we <= '1';
+            wait until rising_edge(clk);  -- write on clock
+            we <= '0';
+            wait for cCLK_PER;
+        end loop;
+
+        for i in 0 to 9 loop
+            addr <= std_logic_vector(to_unsigned(16#100# + i, ADDR_WIDTH));
+            wait for gCLK_HPER/2;
+            wait for cCLK_PER;
+        end loop;
+        wait;
+    end process;
+end architecture;
+
